@@ -8,7 +8,7 @@ func main() {
 	learningGo := true
 	weekHours := 5
 
-	var city string = "Ciudad de Mexico"
+	city := "Ciudad de Mexico"
 
 	// bucle tipo for comun
 	for i := 4; i < 5; i++ {
