@@ -26,7 +26,7 @@ func Sum(number1 int, number2 int) (int, error) {
 func CalculateAdult(age int) (bool, error) {
 
 	if age <= 17 {
-		return false, errors.New("Edad no valida")
+		return false, errors.New("edad no valida")
 	}
 
 	return true, nil
