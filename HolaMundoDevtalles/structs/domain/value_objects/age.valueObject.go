@@ -8,7 +8,6 @@ type Age struct {
 }
 
 func NewAge(age int) (Age, error) {
-
 	if age == 0 {
 		return Age{}, errors.New("edad no valida")
 	}

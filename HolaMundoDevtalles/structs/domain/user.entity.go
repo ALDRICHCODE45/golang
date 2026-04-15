@@ -3,17 +3,18 @@ package domain
 
 import (
 	"errors"
+
 	vo "hello_world/structs/domain/value_objects"
 )
 
 type User struct {
+	ID    int
 	Name  string
 	Age   vo.Age
 	Email vo.Email
 }
 
-func NewUser(email string, name string, Age int) (User, error) {
-
+func NewUser(id int, email string, name string, Age int) (User, error) {
 	if name == "" {
 		return User{}, errors.New("name is invalid")
 	}
@@ -28,5 +29,5 @@ func NewUser(email string, name string, Age int) (User, error) {
 		return User{}, err
 	}
 
-	return User{Name: name, Age: ageV0, Email: emailV0}, nil
+	return User{ID: id, Name: name, Age: ageV0, Email: emailV0}, nil
 }
