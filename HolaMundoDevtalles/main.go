@@ -1,85 +1,132 @@
+// Package main
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"strconv"
+
 	"hello_world/structs/application"
 	"hello_world/structs/application/dtos"
 	"hello_world/structs/infrastructure"
-	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+type Event = string
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		http.Error(w, "error codificando respuesta JSON", http.StatusInternalServerError)
+	}
+}
+
 func main() {
 	// 1. Crear repositorio en memoria
 	userRepositoryInMemory := infrastructure.NewInMemoryUserRepository()
 
-	// 2.Crear casos de uso inyectando el repositorio
+	// 2. Crear casos de uso inyectando el repositorio
 	createUserUseCase := application.NewCreateUserUseCase(userRepositoryInMemory)
 	findByIDUserUseCase := application.NewFindByIDUserUseCase(userRepositoryInMemory)
 	findAllUsersUseCase := application.NewFindAllUsersUseCase(userRepositoryInMemory)
-	deleteUserUseCase := application.NewDeleteUserUseCase(userRepositoryInMemory)
+	updateUserUseCase := application.NewUpdateUserUseCase(userRepositoryInMemory)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello World!"))
+	r.Use(middleware.Recoverer)
+
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	http.ListenAndServe(":3000", r)
+	r.Get("/users", func(w http.ResponseWriter, r *http.Request) {
+		users, err := findAllUsersUseCase.Execute()
+		if err != nil {
+			writeJSON(w, http.StatusOK, []dtos.UserResponseDTO{})
+			return
+		}
 
-	// 3. crear usuarios
-
-	user1, err := createUserUseCase.Execute(dtos.CreateUserDTO{
-		Name:  "Aldrich",
-		Age:   20,
-		Email: "aldrich@aldrichcode.dev",
+		writeJSON(w, http.StatusOK, users)
 	})
-	if err != nil {
-		fmt.Println("error al crear usuario")
-		return
-	}
 
-	fmt.Println("Primer Usuario creado: ", user1)
+	r.Get("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		idParam := chi.URLParam(r, "id")
+		id, err := strconv.Atoi(idParam)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "id debe ser numérico"})
+			return
+		}
 
-	user2, err := createUserUseCase.Execute(dtos.CreateUserDTO{
-		Name:  "Byan",
-		Age:   21,
-		Email: "nocheblanca92@gmail.com",
+		user, err := findByIDUserUseCase.Execute(id)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: err.Error()})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, user)
 	})
-	if err != nil {
-		fmt.Println("error al crear usuario2")
-		return
-	}
-	fmt.Println("Primer Usuario2 creado: ", user2)
 
-	userFounded, err := findByIDUserUseCase.Execute(user2.ID)
-	if err != nil {
-		fmt.Println("error al traer usuario")
-		return
-	}
-	fmt.Println("Usuario encontrado", userFounded)
+	r.Post("/users", func(w http.ResponseWriter, r *http.Request) {
+		var input dtos.CreateUserDTO
 
-	allUsers, err := findAllUsersUseCase.Execute()
-	if err != nil {
-		fmt.Println("error al encontrar todos los usuarios")
-		return
-	}
-	fmt.Println("Todos los usuarios", allUsers)
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "JSON inválido"})
+			return
+		}
 
-	err = deleteUserUseCase.Execute(user2.ID)
-	if err != nil {
-		fmt.Println("error al eliminar el usuario")
-		return
-	}
+		created, err := createUserUseCase.Execute(input)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+			return
+		}
 
-	fmt.Println("usuario eliminado")
+		writeJSON(w, http.StatusCreated, created)
+	})
 
-	all, err := findAllUsersUseCase.Execute()
-	if err != nil {
-		fmt.Println("error al encontrar todos los usuarios")
-		return
+	r.Patch("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		idParam := chi.URLParam(r, "id")
+		id, err := strconv.Atoi(idParam)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "id debe ser numérico"})
+			return
+		}
+
+		var input dtos.UpdateUserDTO
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "Campos inválido"})
+			return
+		}
+
+		if input.Name == nil && input.Age == nil && input.Email == nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "debes enviar al menos un campo para actualizar"})
+			return
+		}
+
+		updated, err := updateUserUseCase.Execute(id, input)
+		if err != nil {
+			if err.Error() == "usuario no encontrado" {
+				writeJSON(w, http.StatusNotFound, errorResponse{Error: err.Error()})
+				return
+			}
+
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, updated)
+	})
+
+	fmt.Println("Servidor corriendo en :3000")
+	if err := http.ListenAndServe(":3000", r); err != nil {
+		fmt.Println("error levantando servidor:", err)
 	}
-	fmt.Println("Todos los usuarios", all)
 }

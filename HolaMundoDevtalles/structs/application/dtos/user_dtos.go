@@ -13,3 +13,9 @@ type UserResponseDTO struct {
 	Age   int    `json:"age"`
 	Email string `json:"email"`
 }
+
+type UpdateUserDTO struct {
+	Name  *string `json:"name"`
+	Age   *int    `json:"age"`
+	Email *string `json:"email"`
+}

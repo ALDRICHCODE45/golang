@@ -5,5 +5,6 @@ type UserRepository interface {
 	FindByID(id int) (*User, error)
 	FindAll() ([]User, error)
 	Save(user User) (*User, error)
+	Update(user User) (*User, error)
 	Delete(id int) error
 }
